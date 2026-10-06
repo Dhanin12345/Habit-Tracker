@@ -271,3 +271,15 @@ npm run dev
 7. Open **Settings**:
    - Adjust your personal Daily Completion Target (e.g., 5 habits).
    - Click `Export CSV` to download the comprehensive data export.
+
+<img width="941" height="496" alt="image" src="https://github.com/user-attachments/assets/f976a06a-89b2-42f4-9754-2a858912a16b" />
+
+<img width="947" height="494" alt="image" src="https://github.com/user-attachments/assets/f783fc92-c2e0-410c-884c-92c4d83b66a4" />
+
+<img width="940" height="487" alt="image" src="https://github.com/user-attachments/assets/423c6b16-5529-4ea8-96ef-295bb6337ca9" />
+
+<img width="940" height="484" alt="image" src="https://github.com/user-attachments/assets/5f5880c1-09bd-41e1-a175-7edeaed7ab9f" />
+
+<img width="941" height="487" alt="image" src="https://github.com/user-attachments/assets/9288d910-234a-4169-8f4a-e89c646cee73" />
+
+<img width="941" height="480" alt="image" src="https://github.com/user-attachments/assets/6d36ede3-7ef7-405a-a4df-be279843b02b" />
