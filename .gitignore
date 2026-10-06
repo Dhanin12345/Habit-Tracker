@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+*/node_modules/
+.venv/
+*/.venv/
+venv/
+*/venv/
+
+# Build artifacts
+dist/
+build/
+*.local
+
+# Python cache & bytecode
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+
+# Database
+db.sqlite3
+*.sqlite3
+
+# Environment
+.env
+*.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
