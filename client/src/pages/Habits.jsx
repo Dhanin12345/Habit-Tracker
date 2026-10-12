@@ -1,203 +1,199 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import {
+  Sparkles, Plus, Search, Filter, Flame, Trophy,
+  Copy, Pause, Play, Archive, Trash2, Edit3, Download,
+  CheckCircle, Clock, Eye
+} from 'lucide-react';
+import CreateHabitModal from '../components/CreateHabitModal';
+import HabitDetailModal from '../components/HabitDetailModal';
 
-const PRESET_COLORS = [
-  '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444'
+const DEFAULT_CATEGORIES = [
+  'All', 'Study', 'Fitness', 'Mindfulness', 'Health',
+  'Coding', 'Reading', 'Sleep', 'Nutrition', 'Finance', 'Personal Development'
 ];
 
-const POPULAR_EMOJIS = ['⭐', '🏃', '📚', '💧', '🧘', '💪', '🌿', '🍎', '🌙', '✍️', '🚴', '🎯'];
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-function Habits({ habits = [], checkinHabit, skipHabit, addHabit, editHabit, archiveHabit, deleteHabit }) {
-  const [activeSubtab, setActiveSubtab] = useState('active'); // 'active' or 'archived'
+export default function Habits({
+  habits = [],
+  checkinHabit,
+  skipHabit,
+  missHabit,
+  pendingHabit,
+  addHabit,
+  editHabit,
+  duplicateHabit,
+  pauseToggleHabit,
+  archiveHabit,
+  deleteHabit,
+  onOpenCreateHabit
+}) {
+  const [activeStatusTab, setActiveStatusTab] = useState('all'); // 'all', 'active', 'paused', 'archived'
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedPriority, setSelectedPriority] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [sortBy, setSortBy] = useState('streak'); // 'streak', 'title', 'priority'
 
-  // Form Fields
-  const [hTitle, setHTitle] = useState('');
-  const [hDesc, setHDesc] = useState('');
-  const [hIcon, setHIcon] = useState('⭐');
-  const [hCat, setHCat] = useState('Health');
-  const [hFreq, setHFreq] = useState('Daily');
-  const [hPriority, setHPriority] = useState('Medium');
-  const [hColor, setHColor] = useState('#10b981');
-  const [hScheduledDays, setHScheduledDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
-  const [hReminderTime, setHReminderTime] = useState('08:00');
-  const [hReminderEnabled, setHReminderEnabled] = useState(true);
-  const [hTarget, setHTarget] = useState(30);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setHTitle('');
-    setHDesc('');
-    setHIcon('⭐');
-    setHCat('Health');
-    setHFreq('Daily');
-    setHPriority('Medium');
-    setHColor('#10b981');
-    setHScheduledDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
-    setHReminderTime('08:00');
-    setHReminderEnabled(true);
-    setHTarget(30);
-  };
-
-  const openCreateModal = () => {
-    resetForm();
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (habit) => {
-    setEditingId(habit._id);
-    setHTitle(habit.title || '');
-    setHDesc(habit.description || '');
-    setHIcon(habit.icon || '⭐');
-    setHCat(habit.category || 'Health');
-    setHFreq(habit.frequency || 'Daily');
-    setHPriority(habit.priority || 'Medium');
-    setHColor(habit.color || '#10b981');
-    setHScheduledDays(habit.scheduledDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
-    setHReminderTime(habit.reminderTime || '08:00');
-    setHReminderEnabled(habit.reminderEnabled !== false);
-    setHTarget(habit.target || 30);
-    setIsModalOpen(true);
-  };
-
-  const toggleScheduledDay = (day) => {
-    if (hScheduledDays.includes(day)) {
-      if (hScheduledDays.length > 1) {
-        setHScheduledDays(hScheduledDays.filter(d => d !== day));
-      }
-    } else {
-      setHScheduledDays([...hScheduledDays, day]);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!hTitle.trim()) return;
-
-    const payload = {
-      title: hTitle.trim(),
-      description: hDesc.trim(),
-      category: hCat,
-      icon: hIcon || '⭐',
-      frequency: hFreq,
-      priority: hPriority,
-      color: hColor,
-      scheduledDays: hScheduledDays,
-      reminderTime: hReminderTime,
-      reminderEnabled: hReminderEnabled,
-      target: parseInt(hTarget) || 30
-    };
-
-    let success = false;
-    if (editingId) {
-      success = await editHabit(editingId, payload);
-    } else {
-      success = await addHabit(payload);
-    }
-
-    if (success) {
-      resetForm();
-      setIsModalOpen(false);
-    }
-  };
+  // Modals
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingHabit, setEditingHabit] = useState(null);
+  const [detailHabit, setDetailHabit] = useState(null);
 
   const todayISO = new Date().toISOString().slice(0, 10);
-  const isDoneToday = (h) => {
-    return h.completedDates && h.completedDates.some(d => d.slice(0, 10) === todayISO);
-  };
+  const isDoneToday = (h) => h.completedDates && h.completedDates.some(d => d.slice(0, 10) === todayISO);
+  const isSkippedToday = (h) => h.skippedDates && h.skippedDates.some(d => d.slice(0, 10) === todayISO);
+  const isMissedToday = (h) => h.missedDates && h.missedDates.some(d => d.slice(0, 10) === todayISO);
 
-  const isSkippedToday = (h) => {
-    return h.skippedDates && h.skippedDates.some(d => d.slice(0, 10) === todayISO);
-  };
+  // Filter List
+  const filteredHabits = habits.filter(h => {
+    // Status tab filter
+    if (activeStatusTab === 'active' && (h.isArchived || h.status === 'paused')) return false;
+    if (activeStatusTab === 'paused' && (h.status !== 'paused' || h.isArchived)) return false;
+    if (activeStatusTab === 'archived' && !h.isArchived) return false;
 
-  // Filter Active vs Archived
-  const activeHabitsList = habits.filter(h => !h.isArchived);
-  const archivedHabitsList = habits.filter(h => h.isArchived);
+    // Category filter
+    if (selectedCategory !== 'All' && h.category !== selectedCategory) return false;
 
-  const displayedList = activeSubtab === 'active' ? activeHabitsList : archivedHabitsList;
+    // Priority filter
+    if (selectedPriority !== 'All' && h.priority !== selectedPriority) return false;
 
-  // Filter Categories & Priority & Search
-  const categoriesList = ['All', ...new Set(habits.map(h => h.category))];
-  const filteredHabits = displayedList.filter(h => {
-    const matchesCat = selectedCategory === 'All' || h.category === selectedCategory;
-    const matchesPriority = selectedPriority === 'All' || (h.priority || 'Medium') === selectedPriority;
-    const matchesSearch = !searchQuery || 
-      h.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (h.description && h.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCat && matchesPriority && matchesSearch;
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = h.title && h.title.toLowerCase().includes(q);
+      const matchDesc = h.description && h.description.toLowerCase().includes(q);
+      const matchCat = h.category && h.category.toLowerCase().includes(q);
+      if (!matchTitle && !matchDesc && !matchCat) return false;
+    }
+
+    return true;
   });
 
-  const doneCount = activeHabitsList.filter(isDoneToday).length;
-  const totalCount = activeHabitsList.length;
-  const completionRate = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+  // Sort
+  const sortedHabits = [...filteredHabits].sort((a, b) => {
+    if (sortBy === 'streak') {
+      return (b.streak || 0) - (a.streak || 0);
+    }
+    if (sortBy === 'title') {
+      return a.title.localeCompare(b.title);
+    }
+    if (sortBy === 'priority') {
+      const pWeights = { High: 3, Medium: 2, Low: 1 };
+      return (pWeights[b.priority] || 1) - (pWeights[a.priority] || 1);
+    }
+    return 0;
+  });
+
+  const handleSaveHabit = async (payload, id) => {
+    if (id) {
+      await editHabit(id, payload);
+    } else {
+      await addHabit(payload);
+    }
+    setEditingHabit(null);
+  };
+
+  const handleExportCSV = () => {
+    window.open('/api/habits/export/csv', '_blank');
+  };
+
+  const handleExportJSON = () => {
+    window.open('/api/habits/export/json', '_blank');
+  };
 
   return (
     <div className="page on">
       {/* Top Header */}
       <div className="topbar">
         <div className="tb-left">
-          <div className="pg-title">My Habits</div>
-          <div className="pg-sub">Manage, customize, and maintain your daily commitments</div>
+          <div className="pg-title">Habit Management</div>
+          <div className="pg-sub">Organize, customize, and maintain your habits across lifestyle pillars</div>
         </div>
-        <div className="tb-right">
-          <button className="btn sm" onClick={openCreateModal}>
-            + New Habit
+
+        <div style={{ display: 'flex', gap: '0.65rem' }}>
+          <button
+            type="button"
+            className="btn-s"
+            onClick={handleExportCSV}
+            title="Export CSV of habits"
+          >
+            <Download size={15} /> Export CSV
+          </button>
+          <button
+            type="button"
+            className="btn-p"
+            onClick={() => {
+              setEditingHabit(null);
+              setIsCreateModalOpen(true);
+            }}
+          >
+            <Plus size={16} /> New Habit
           </button>
         </div>
       </div>
 
-      {/* Subtab bar: Active vs Archived */}
+      {/* Status Tabs */}
       <div className="subtab-bar">
         <button
-          className={`subtab-btn ${activeSubtab === 'active' ? 'active' : ''}`}
-          onClick={() => setActiveSubtab('active')}
+          type="button"
+          className={`subtab-btn ${activeStatusTab === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveStatusTab('all')}
         >
-          Active Habits ({activeHabitsList.length})
+          All Habits ({habits.length})
         </button>
         <button
-          className={`subtab-btn ${activeSubtab === 'archived' ? 'active' : ''}`}
-          onClick={() => setActiveSubtab('archived')}
+          type="button"
+          className={`subtab-btn ${activeStatusTab === 'active' ? 'active' : ''}`}
+          onClick={() => setActiveStatusTab('active')}
         >
-          📦 Archived Habits ({archivedHabitsList.length})
+          ⚡ Active ({habits.filter(h => !h.isArchived && h.status !== 'paused').length})
+        </button>
+        <button
+          type="button"
+          className={`subtab-btn ${activeStatusTab === 'paused' ? 'active' : ''}`}
+          onClick={() => setActiveStatusTab('paused')}
+        >
+          ⏸ Paused ({habits.filter(h => h.status === 'paused' && !h.isArchived).length})
+        </button>
+        <button
+          type="button"
+          className={`subtab-btn ${activeStatusTab === 'archived' ? 'active' : ''}`}
+          onClick={() => setActiveStatusTab('archived')}
+        >
+          📦 Archived ({habits.filter(h => h.isArchived).length})
         </button>
       </div>
 
-      {/* Search and Filters Bar */}
-      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
-        <input
-          placeholder="🔍 Search habits..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: '180px',
-            border: '1.5px solid var(--border)',
-            borderRadius: '8px',
-            padding: '7px 12px',
-            fontSize: '0.82rem',
-            background: 'var(--card)',
-            color: 'var(--text)'
-          }}
-        />
+      {/* Search, Priority & Sort Bar */}
+      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+        <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+          <input
+            placeholder="Search habits by name, category, or cue notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '9px 12px 9px 34px',
+              borderRadius: '10px',
+              border: '1.5px solid var(--border)',
+              background: 'var(--card)',
+              color: 'var(--text)',
+              fontSize: '0.85rem'
+            }}
+          />
+          <Search size={16} style={{ position: 'absolute', left: '11px', top: '12px', color: 'var(--sub)' }} />
+        </div>
 
         <select
           value={selectedPriority}
           onChange={(e) => setSelectedPriority(e.target.value)}
           style={{
+            padding: '9px 12px',
+            borderRadius: '10px',
             border: '1.5px solid var(--border)',
-            borderRadius: '8px',
-            padding: '7px 10px',
-            fontSize: '0.8rem',
-            fontWeight: 600,
             background: 'var(--card)',
-            color: 'var(--text)'
+            color: 'var(--text)',
+            fontSize: '0.82rem',
+            fontWeight: 700
           }}
         >
           <option value="All">All Priorities</option>
@@ -205,411 +201,317 @@ function Habits({ habits = [], checkinHabit, skipHabit, addHabit, editHabit, arc
           <option value="Medium">🟡 Medium Priority</option>
           <option value="Low">🔵 Low Priority</option>
         </select>
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          style={{
+            padding: '9px 12px',
+            borderRadius: '10px',
+            border: '1.5px solid var(--border)',
+            background: 'var(--card)',
+            color: 'var(--text)',
+            fontSize: '0.82rem',
+            fontWeight: 700
+          }}
+        >
+          <option value="streak">Sort by Streak (High to Low)</option>
+          <option value="priority">Sort by Priority</option>
+          <option value="title">Sort Alphabetically</option>
+        </select>
       </div>
 
-      {/* Categories chips filter */}
-      <div className="chips">
-        {categoriesList.map((cat) => (
+      {/* Category Pills Filter */}
+      <div className="chips" style={{ marginBottom: '1.25rem' }}>
+        {DEFAULT_CATEGORIES.map(cat => {
+          const count = cat === 'All' ? habits.length : habits.filter(h => h.category === cat).length;
+          return (
+            <button
+              key={cat}
+              type="button"
+              className={`chip ${selectedCategory === cat ? 'on' : ''}`}
+              onClick={() => setSelectedCategory(cat)}
+            >
+              {cat} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Habits Grid */}
+      {sortedHabits.length === 0 ? (
+        <div style={{
+          background: 'var(--card)',
+          border: '1px solid var(--border)',
+          borderRadius: '18px',
+          padding: '3rem 1.5rem',
+          textAlign: 'center',
+          color: 'var(--sub)'
+        }}>
+          <Sparkles size={36} color="var(--accent)" style={{ margin: '0 auto 0.75rem' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text)' }}>No habits found</h3>
+          <p style={{ fontSize: '0.85rem', marginTop: '4px' }}>
+            Try resetting your search query or create a new habit.
+          </p>
           <button
-            key={cat}
-            className={`chip ${selectedCategory === cat ? 'on' : ''}`}
-            onClick={() => setSelectedCategory(cat)}
+            type="button"
+            className="btn-p"
+            style={{ margin: '1rem auto 0' }}
+            onClick={() => {
+              setEditingHabit(null);
+              setIsCreateModalOpen(true);
+            }}
           >
-            {cat} ({cat === 'All' ? displayedList.length : displayedList.filter(h => h.category === cat).length})
+            <Plus size={16} /> Create Habit Now
           </button>
-        ))}
-      </div>
-
-      {/* Habits list */}
-      <div id="habList">
-        {filteredHabits.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--sub)' }}>
-            <span style={{ fontSize: '2.2rem' }}>🌿</span>
-            <p style={{ marginTop: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>No habits found matching your filter.</p>
-            {activeSubtab === 'active' && (
-              <button className="btn sm" style={{ margin: '0.8rem auto 0', width: 'auto' }} onClick={openCreateModal}>
-                + Create Your First Habit
-              </button>
-            )}
-          </div>
-        ) : (
-          filteredHabits.map((h) => {
-            const done = isDoneToday(h);
-            const skipped = isSkippedToday(h);
-            const streakPct = Math.min(100, Math.round((h.streak / (h.target || 30)) * 100));
-            const habitColor = h.color || '#10b981';
-            const scheduledDays = h.scheduledDays || WEEKDAYS;
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1.15rem' }}>
+          {sortedHabits.map((habit) => {
+            const habitId = habit._id || habit.id;
+            const isDone = isDoneToday(habit);
+            const isSkip = isSkippedToday(habit);
+            const isMiss = isMissedToday(habit);
+            const totalCompletions = (habit.completedDates || []).length;
+            const targetDays = habit.target || 30;
+            const progressPct = Math.min(100, Math.round((totalCompletions / targetDays) * 100));
 
             return (
-              <div key={h._id} className={`hr ${done ? 'done' : ''}`} style={{ borderLeft: `4px solid ${habitColor}` }}>
-                {/* Icon */}
-                <div
-                  className="h-em"
-                  style={{
-                    background: `${habitColor}18`,
-                    color: habitColor,
-                    borderColor: `${habitColor}33`,
-                    borderWidth: '1px',
-                    borderStyle: 'solid'
-                  }}
-                >
-                  {h.icon || '⭐'}
-                </div>
-
-                {/* Details */}
-                <div className="h-bd">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                    <span className="h-nm">{h.title}</span>
-                    <span className={`priority-tag ${(h.priority || 'medium').toLowerCase()}`}>
-                      {h.priority || 'Medium'}
+              <div
+                key={habitId}
+                style={{
+                  background: 'var(--card)',
+                  border: isDone ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border)',
+                  borderRadius: '16px',
+                  padding: '1.25rem',
+                  boxShadow: 'var(--shadow)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.85rem',
+                  position: 'relative',
+                  borderTop: `4px solid ${habit.color || 'var(--accent)'}`,
+                  opacity: habit.status === 'paused' ? 0.75 : 1
+                }}
+              >
+                {/* Header: Icon, Title, Category */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{
+                      fontSize: '1.5rem',
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: `${habit.color || '#10b981'}20`,
+                      display: 'grid',
+                      placeItems: 'center'
+                    }}>
+                      {habit.icon || '⭐'}
                     </span>
-                    {h.reminderTime && (
-                      <span style={{ fontSize: '0.68rem', color: 'var(--sub)', background: 'var(--bg)', padding: '1px 6px', borderRadius: '5px' }}>
-                        ⏰ {h.reminderTime} {h.reminderEnabled ? '🔔' : '🔕'}
-                      </span>
-                    )}
-                  </div>
-
-                  {h.description && (
-                    <div className="habit-desc">{h.description}</div>
-                  )}
-
-                  <div className="h-mt" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '3px' }}>
-                    <span>{h.category} · {h.frequency || 'Daily'} · Target: {h.target || 30}d</span>
-                    
-                    {/* Days badges */}
-                    <span style={{ display: 'inline-flex', gap: '2px', marginLeft: '4px' }}>
-                      {WEEKDAYS.map((d) => (
-                        <span
-                          key={d}
-                          className={`day-badge ${scheduledDays.includes(d) ? 'active' : ''}`}
-                          style={scheduledDays.includes(d) ? { background: habitColor } : {}}
-                        >
-                          {d[0]}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '4px' }}>
-                    <span className="spill">🔥 {h.streak} day streak</span>
-                    {h.longestStreak > 0 && (
-                      <span style={{ fontSize: '0.72rem', color: 'var(--sub)' }}>
-                        Best: {h.longestStreak}d
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Progress bar */}
-                  <div style={{ marginTop: '5px' }}>
-                    <div className="pb" style={{ height: '4px', width: '130px' }}>
-                      <div
-                        className="pf"
+                    <div>
+                      <h4
                         style={{
-                          background: habitColor,
-                          width: `${streakPct}%`
+                          fontSize: '0.96rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          color: 'var(--text)'
                         }}
-                      />
+                        onClick={() => setDetailHabit(habit)}
+                        title="Click to view full habit details"
+                      >
+                        {habit.title}
+                      </h4>
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                        <span className="chip" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>{habit.category}</span>
+                        <span className={`priority-tag ${habit.priority.toLowerCase()}`} style={{ fontSize: '0.65rem' }}>
+                          {habit.priority}
+                        </span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Streak pill */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    color: '#f59e0b',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    padding: '3px 8px',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '0.78rem'
+                  }}>
+                    <Flame size={14} /> {habit.streak || 0}d
+                  </div>
                 </div>
 
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexShrink: 0 }}>
-                  {/* Edit button */}
-                  <button
-                    onClick={() => openEditModal(h)}
-                    className="del"
-                    style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
-                    title="Edit habit"
-                  >
-                    ✏️
-                  </button>
+                {habit.description && (
+                  <p className="habit-desc" style={{ fontSize: '0.8rem', color: 'var(--sub)' }}>
+                    {habit.description}
+                  </p>
+                )}
 
-                  {/* Archive button */}
-                  <button
-                    onClick={() => archiveHabit(h._id)}
-                    className="del"
-                    style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
-                    title={h.isArchived ? 'Unarchive habit' : 'Archive habit'}
-                  >
-                    {h.isArchived ? '📂' : '📦'}
-                  </button>
+                {/* Progress bar to target */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--sub)', marginBottom: '3px' }}>
+                    <span>Target Progress</span>
+                    <span><strong>{totalCompletions}</strong> / {targetDays} Days ({progressPct}%)</span>
+                  </div>
+                  <div className="goal-progress-bar">
+                    <div className="goal-progress-fill" style={{ width: `${progressPct}%`, background: habit.color || 'var(--accent)' }} />
+                  </div>
+                </div>
 
-                  {/* Delete button */}
-                  <button
-                    onClick={() => deleteHabit(h._id)}
-                    className="del"
-                    style={{ background: '#fef2f2' }}
-                    title="Delete habit"
-                  >
-                    ✕
-                  </button>
-
-                  {/* Skip button */}
-                  {!h.isArchived && (
+                {/* 4-State Checkin Controls */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.2rem' }}>
+                  <div className="checkin-btn-group">
                     <button
-                      className="del"
-                      style={{
-                        background: skipped ? '#fef3c7' : 'var(--bg)',
-                        color: '#d97706',
-                        border: '1px solid var(--border)',
-                        width: '32px',
-                        height: '32px'
+                      type="button"
+                      className={`chk-btn ${isDone ? 'active completed' : ''}`}
+                      onClick={() => checkinHabit(habitId)}
+                    >
+                      ✓ Done
+                    </button>
+                    <button
+                      type="button"
+                      className={`chk-btn ${isSkip ? 'active skipped' : ''}`}
+                      onClick={() => skipHabit(habitId)}
+                    >
+                      ⏸ Skip
+                    </button>
+                    <button
+                      type="button"
+                      className={`chk-btn ${isMiss ? 'active missed' : ''}`}
+                      onClick={() => missHabit(habitId)}
+                    >
+                      ✗ Miss
+                    </button>
+                    {(isDone || isSkip || isMiss) && (
+                      <button
+                        type="button"
+                        className="chk-btn"
+                        onClick={() => pendingHabit(habitId)}
+                        title="Reset to Pending"
+                      >
+                        ⏳
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-s"
+                    style={{ padding: '5px 8px', fontSize: '0.75rem' }}
+                    onClick={() => setDetailHabit(habit)}
+                    title="View details & mini-heatmap"
+                  >
+                    <Eye size={13} /> View
+                  </button>
+                </div>
+
+                {/* Card Action Toolbar */}
+                <div style={{
+                  borderTop: '1px solid var(--border)',
+                  paddingTop: '0.65rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      type="button"
+                      className="btn-s"
+                      style={{ padding: '4px 7px', fontSize: '0.72rem' }}
+                      onClick={() => duplicateHabit(habitId)}
+                      title="Duplicate habit"
+                    >
+                      <Copy size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-s"
+                      style={{ padding: '4px 7px', fontSize: '0.72rem' }}
+                      onClick={() => pauseToggleHabit(habitId)}
+                      title={habit.status === 'paused' ? 'Resume habit' : 'Pause habit'}
+                    >
+                      {habit.status === 'paused' ? <Play size={12} /> : <Pause size={12} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-s"
+                      style={{ padding: '4px 7px', fontSize: '0.72rem' }}
+                      onClick={() => archiveHabit(habitId)}
+                      title={habit.isArchived ? 'Unarchive' : 'Archive'}
+                    >
+                      <Archive size={12} />
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      type="button"
+                      className="btn-s"
+                      style={{ padding: '4px 8px', fontSize: '0.72rem' }}
+                      onClick={() => {
+                        setEditingHabit(habit);
+                        setIsCreateModalOpen(true);
                       }}
-                      onClick={() => skipHabit && skipHabit(h._id)}
-                      disabled={skipped || done}
-                      title={skipped ? 'Skipped today' : 'Skip for today'}
+                      title="Edit Habit"
                     >
-                      ⏭
+                      <Edit3 size={12} /> Edit
                     </button>
-                  )}
-
-                  {/* Checkin button */}
-                  {!h.isArchived && (
                     <button
-                      className={`chk ${done ? 'done' : ''}`}
-                      onClick={() => checkinHabit(h._id)}
-                      disabled={done}
-                      title={done ? 'Completed today' : 'Mark completed'}
+                      type="button"
+                      className="btn-s"
+                      style={{ padding: '4px 7px', fontSize: '0.72rem', color: 'var(--red)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                      onClick={() => {
+                        if (window.confirm(`Delete habit "${habit.title}"?`)) {
+                          deleteHabit(habitId);
+                        }
+                      }}
+                      title="Delete Habit"
                     >
-                      ✓
+                      <Trash2 size={12} />
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
-
-      {/* Today's completions progress bar */}
-      <div style={{ marginTop: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 800, color: 'var(--sub)', marginBottom: '0.38rem' }}>
-          <span>TODAY'S ACTIVE COMPLETIONS</span>
-          <span style={{ color: 'var(--accent)' }}>{completionRate}%</span>
+          })}
         </div>
-        <div className="pb" style={{ height: '9px' }}>
-          <div
-            className="pf"
-            style={{
-              background: completionRate === 100 ? '#16a34a' : 'var(--accent)',
-              width: `${completionRate}%`
-            }}
-          />
-        </div>
-      </div>
+      )}
 
-      {/* Modal Overlay for Add / Edit Habit */}
-      {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '480px' }}>
-            <div className="mt">{editingId ? '✏️ Edit Habit' : '➕ New Habit'}</div>
-            <form onSubmit={handleSubmit}>
-              {/* Habit Name & Icon */}
-              <div style={{ display: 'flex', gap: '0.6rem' }}>
-                <div className="field" style={{ flex: 1 }}>
-                  <label>Habit Name</label>
-                  <input
-                    placeholder="e.g. Morning 5km Run"
-                    value={hTitle}
-                    onChange={(e) => setHTitle(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="field" style={{ width: '75px' }}>
-                  <label>Emoji</label>
-                  <input
-                    value={hIcon}
-                    onChange={(e) => setHIcon(e.target.value)}
-                    style={{ textAlign: 'center', fontSize: '1.2rem' }}
-                  />
-                </div>
-              </div>
+      {/* Shared Modals */}
+      <CreateHabitModal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingHabit(null);
+        }}
+        onSave={handleSaveHabit}
+        editingHabit={editingHabit}
+      />
 
-              {/* Popular Emoji quick picks */}
-              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
-                {POPULAR_EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setHIcon(emoji)}
-                    style={{
-                      background: hIcon === emoji ? 'var(--accent-l)' : 'none',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      padding: '2px 6px',
-                      cursor: 'pointer',
-                      fontSize: '1rem'
-                    }}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-
-              {/* Habit Description */}
-              <div className="field">
-                <label>Description / Notes (Optional)</label>
-                <textarea
-                  placeholder="e.g. Drink before having coffee; stretch afterwards."
-                  value={hDesc}
-                  onChange={(e) => setHDesc(e.target.value)}
-                  rows="2"
-                  style={{
-                    width: '100%',
-                    border: '1.5px solid var(--border)',
-                    borderRadius: '9px',
-                    padding: '8px 10px',
-                    fontSize: '0.84rem',
-                    fontFamily: 'inherit',
-                    background: 'var(--card)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-
-              {/* Category & Priority */}
-              <div style={{ display: 'flex', gap: '0.6rem' }}>
-                <div className="field" style={{ flex: 1 }}>
-                  <label>Category</label>
-                  <select value={hCat} onChange={(e) => setHCat(e.target.value)}>
-                    <option>Health</option>
-                    <option>Study</option>
-                    <option>Fitness</option>
-                    <option>Mindfulness</option>
-                    <option>Social</option>
-                    <option>Custom</option>
-                  </select>
-                </div>
-                <div className="field" style={{ flex: 1 }}>
-                  <label>Priority</label>
-                  <select value={hPriority} onChange={(e) => setHPriority(e.target.value)}>
-                    <option value="High">🔴 High Priority</option>
-                    <option value="Medium">🟡 Medium Priority</option>
-                    <option value="Low">🔵 Low Priority</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Accent Color picker */}
-              <div className="field">
-                <label>Accent Color</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {PRESET_COLORS.map((c) => (
-                    <div
-                      key={c}
-                      className={`color-dot ${hColor === c ? 'selected' : ''}`}
-                      style={{ background: c }}
-                      onClick={() => setHColor(c)}
-                    />
-                  ))}
-                  <input
-                    type="color"
-                    value={hColor}
-                    onChange={(e) => setHColor(e.target.value)}
-                    style={{ width: '28px', height: '28px', padding: 0, border: 'none', cursor: 'pointer', background: 'none' }}
-                    title="Custom color"
-                  />
-                </div>
-              </div>
-
-              {/* Scheduled Days */}
-              <div className="field">
-                <label>Scheduled Days</label>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  {WEEKDAYS.map((day) => {
-                    const isSelected = hScheduledDays.includes(day);
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() => toggleScheduledDay(day)}
-                        style={{
-                          flex: 1,
-                          padding: '6px 0',
-                          border: '1px solid var(--border)',
-                          borderRadius: '6px',
-                          fontSize: '0.74rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          background: isSelected ? hColor : 'var(--card)',
-                          color: isSelected ? '#fff' : 'var(--sub)'
-                        }}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Frequency, Reminder & Target */}
-              <div style={{ display: 'flex', gap: '0.6rem' }}>
-                <div className="field" style={{ flex: 1 }}>
-                  <label>Frequency</label>
-                  <select value={hFreq} onChange={(e) => setHFreq(e.target.value)}>
-                    <option>Daily</option>
-                    <option>Weekdays only</option>
-                    <option>Weekends</option>
-                  </select>
-                </div>
-                <div className="field" style={{ width: '85px' }}>
-                  <label>Target (days)</label>
-                  <input
-                    type="number"
-                    value={hTarget}
-                    onChange={(e) => setHTarget(e.target.value)}
-                    min="1"
-                    max="365"
-                  />
-                </div>
-              </div>
-
-              {/* Persistent Reminder settings */}
-              <div className="field" style={{ background: 'var(--bg)', padding: '0.65rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ margin: 0 }}>⏰ Daily Reminder</label>
-                  <label className="sw" style={{ transform: 'scale(0.85)' }}>
-                    <input
-                      type="checkbox"
-                      checked={hReminderEnabled}
-                      onChange={(e) => setHReminderEnabled(e.target.checked)}
-                    />
-                    <span className="sw-sl" />
-                  </label>
-                </div>
-                {hReminderEnabled && (
-                  <div style={{ marginTop: '0.45rem' }}>
-                    <input
-                      type="time"
-                      value={hReminderTime}
-                      onChange={(e) => setHReminderTime(e.target.value)}
-                      style={{ padding: '6px 8px', fontSize: '0.84rem' }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="mrow">
-                <button type="submit" className="btn">
-                  {editingId ? 'Save Changes' : 'Create Habit'}
-                </button>
-                <button
-                  type="button"
-                  className="btn outline"
-                  style={{ width: 'auto', padding: '11px 18px' }}
-                  onClick={() => setIsModalOpen(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {detailHabit && (
+        <HabitDetailModal
+          habit={detailHabit}
+          isOpen={!!detailHabit}
+          onClose={() => setDetailHabit(null)}
+          onCheckin={checkinHabit}
+          onSkip={skipHabit}
+          onMiss={missHabit}
+          onPending={pendingHabit}
+          onEdit={(h) => {
+            setDetailHabit(null);
+            setEditingHabit(h);
+            setIsCreateModalOpen(true);
+          }}
+          onDuplicate={duplicateHabit}
+          onPauseToggle={pauseToggleHabit}
+          onArchiveToggle={archiveHabit}
+          onDelete={deleteHabit}
+        />
       )}
     </div>
   );
 }
-
-export default Habits;

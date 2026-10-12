@@ -1,29 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Sparkles } from 'lucide-react';
 
-function Register({ onNavigateToLogin, initialEmail = '' }) {
+export default function Register({ onNavigateToLogin, onBackToLanding, initialEmail = '' }) {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
-  const [goal, setGoal] = useState('🌟 All-round improvement');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password) return;
+    if (!name.trim() || !email.trim() || !password) {
+      setErrorMessage('Please fill in all required fields.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
 
     setErrorMessage('');
     setIsSubmitting(true);
     try {
-      const success = await register(name.trim(), email.trim(), password);
-      if (success) {
-        localStorage.setItem('zh_user_goal', goal);
-      }
+      await register(name.trim(), email.trim(), password);
     } catch (err) {
-      const msg = err.message || 'Registration failed';
-      setErrorMessage(msg);
+      setErrorMessage(err.message || 'Registration failed.');
     } finally {
       setIsSubmitting(false);
     }
@@ -32,11 +48,33 @@ function Register({ onNavigateToLogin, initialEmail = '' }) {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
+        {/* Brand */}
         <div className="auth-brand">
-          <div className="brand-leaf">🌿</div>
-          <div className="brand-name">ZenHabit</div>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #10b981, #3b82f6)',
+            display: 'grid',
+            placeItems: 'center',
+            color: '#fff',
+            boxShadow: '0 0 16px rgba(16, 185, 129, 0.4)'
+          }}>
+            <Sparkles size={22} />
+          </div>
+          <div style={{
+            fontSize: '1.45rem',
+            fontWeight: 900,
+            letterSpacing: '-0.02em',
+            background: 'linear-gradient(135deg, var(--text) 30%, var(--accent) 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent'
+          }}>
+            HabitFlow AI
+          </div>
         </div>
-        <p className="auth-sub">Start your mindful habit journey today.</p>
+
+        <p className="auth-sub">Create your account to unlock AI habit tracking.</p>
 
         <div className="auth-switch">
           <button className="ath" onClick={() => onNavigateToLogin(email)}>Sign In</button>
@@ -45,38 +83,17 @@ function Register({ onNavigateToLogin, initialEmail = '' }) {
 
         {errorMessage && (
           <div style={{
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            color: '#dc2626',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#ef4444',
             borderRadius: '10px',
             padding: '0.75rem 0.9rem',
             fontSize: '0.82rem',
             marginBottom: '1rem',
-            lineHeight: 1.4
+            lineHeight: 1.4,
+            fontWeight: 700
           }}>
-            <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>⚠️ {errorMessage}</div>
-            {errorMessage.toLowerCase().includes('already exists') && (
-              <div style={{ marginTop: '0.35rem' }}>
-                This account is already registered.{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigateToLogin(email)}
-                  style={{
-                    background: '#dc2626',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '3px 9px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    marginTop: '0.25rem'
-                  }}
-                >
-                  Sign In to Your Account →
-                </button>
-              </div>
-            )}
+            ⚠️ {errorMessage}
           </div>
         )}
 
@@ -85,9 +102,12 @@ function Register({ onNavigateToLogin, initialEmail = '' }) {
             <label>Full Name</label>
             <input
               type="text"
-              placeholder="Alex Johnson"
+              placeholder="e.g. Dhanin"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setErrorMessage('');
+              }}
               required
             />
           </div>
@@ -96,7 +116,7 @@ function Register({ onNavigateToLogin, initialEmail = '' }) {
             <label>Email Address</label>
             <input
               type="email"
-              placeholder="you@college.edu"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -110,26 +130,32 @@ function Register({ onNavigateToLogin, initialEmail = '' }) {
             <label>Password</label>
             <input
               type="password"
-              placeholder="Min 6 characters"
+              placeholder="At least 6 characters"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setErrorMessage('');
+              }}
               required
             />
           </div>
 
           <div className="field">
-            <label>Primary Goal</label>
-            <select value={goal} onChange={(e) => setGoal(e.target.value)}>
-              <option>📚 Build study habits</option>
-              <option>💪 Improve fitness</option>
-              <option>🧘 Mental wellness</option>
-              <option>💧 Health & hydration</option>
-              <option>🌟 All-round improvement</option>
-            </select>
+            <label>Confirm Password</label>
+            <input
+              type="password"
+              placeholder="Re-enter password"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setErrorMessage('');
+              }}
+              required
+            />
           </div>
 
-          <button type="submit" className="btn" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating Account...' : 'Create Account →'}
+          <button type="submit" className="btn" disabled={isSubmitting} style={{ marginTop: '0.5rem' }}>
+            {isSubmitting ? 'Creating Account...' : 'Get Started →'}
           </button>
         </form>
 
@@ -139,9 +165,26 @@ function Register({ onNavigateToLogin, initialEmail = '' }) {
             Sign In
           </a>
         </p>
+
+        {onBackToLanding && (
+          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--sub)',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              ← Back to Landing Page
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default Register;

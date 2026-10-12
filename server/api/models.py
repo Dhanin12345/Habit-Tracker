@@ -12,6 +12,7 @@ class User(AbstractUser):
     dailyTarget = models.IntegerField(default=4)
     bio = models.TextField(blank=True, default='')
     timezone = models.CharField(max_length=100, default='UTC', blank=True)
+    resetToken = models.CharField(max_length=100, blank=True, default='')
 
     def __str__(self):
         return self.email
@@ -29,20 +30,50 @@ class Habit(models.Model):
     reminderTime = models.CharField(max_length=20, default='08:00', blank=True)
     reminderEnabled = models.BooleanField(default=True)
     isArchived = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, default='active')  # active, paused, archived
     target = models.IntegerField(default=30)
     streak = models.IntegerField(default=0)
     longestStreak = models.IntegerField(default=0)
     completedDates = models.JSONField(default=list, blank=True)
     skippedDates = models.JSONField(default=list, blank=True)
+    missedDates = models.JSONField(default=list, blank=True)
+    startDate = models.CharField(max_length=50, blank=True, default='')
+    targetDate = models.CharField(max_length=50, blank=True, default='')
     createdAt = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updatedAt = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     def __str__(self):
         return f"{self.title} ({self.user.email})"
 
+class Goal(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='goals')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    target = models.IntegerField(default=30)
+    progress = models.IntegerField(default=0)
+    deadline = models.CharField(max_length=50, blank=True, default='')
+    relatedHabits = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=50, default='in_progress')  # in_progress, achieved, paused
+    createdAt = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Goal: {self.title} ({self.user.email})"
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    type = models.CharField(max_length=50, default='reminder')  # reminder, streak, achievement, system, ai
+    readStatus = models.BooleanField(default=False)
+    createdAt = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Notification for {self.user.email}: {self.title}"
+
 class JournalEntry(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='journal_entries')
-    date = models.CharField(max_length=100) # e.g. "May 21, 2026"
-    mood = models.CharField(max_length=50) # e.g. "😄"
+    date = models.CharField(max_length=100)
+    mood = models.CharField(max_length=50)
     text = models.TextField()
     createdAt = models.DateTimeField(auto_now_add=True)
 

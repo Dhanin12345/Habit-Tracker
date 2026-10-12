@@ -1,19 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import {
+  Sparkles, Flame, Trophy, CheckCircle, Clock, Plus,
+  ArrowRight, AlertTriangle, Brain, Target, Calendar,
+  TrendingUp, Award, Zap
+} from 'lucide-react';
+import HabitDetailModal from '../components/HabitDetailModal';
 
 const QUOTES = [
-  { t: 'Small daily habits create big life changes.', a: '— James Clear' },
+  { t: 'Small daily habits create big compound life changes.', a: '— James Clear' },
   { t: 'Discipline is choosing between what you want now and what you want most.', a: '— Abraham Lincoln' },
   { t: "You don't rise to the level of your goals, you fall to the level of your systems.", a: '— Atomic Habits' },
   { t: 'Every action you take is a vote for the person you want to become.', a: '— James Clear' },
   { t: 'The secret of getting ahead is getting started.', a: '— Mark Twain' },
-  { t: 'Progress, not perfection — each step counts.', a: '— ZenHabit' },
-  { t: 'Motivation gets you started. Habit keeps you going.', a: '— Jim Ryun' },
+  { t: 'Progress compounds silently before it manifests exponentially.', a: '— HabitFlow AI' },
 ];
 
-function Dashboard({ habits = [], checkinHabit, xp = 240, level = 3, setActiveTab, darkMode, setDarkMode }) {
+export default function Dashboard({
+  habits = [],
+  checkinHabit,
+  skipHabit,
+  missHabit,
+  pendingHabit,
+  addHabit,
+  editHabit,
+  duplicateHabit,
+  pauseToggleHabit,
+  archiveHabit,
+  deleteHabit,
+  setActiveTab,
+  onOpenCreateHabit,
+  xp = 240,
+  level = 3
+}) {
   const { user } = useAuth();
   const [quote, setQuote] = useState({ t: '', a: '' });
+  const [selectedHabitForDetail, setSelectedHabitForDetail] = useState(null);
+  const [filterToday, setFilterToday] = useState('all'); // all, pending, completed
 
   useEffect(() => {
     const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
@@ -22,39 +45,38 @@ function Dashboard({ habits = [], checkinHabit, xp = 240, level = 3, setActiveTa
 
   const getGreeting = () => {
     const hrs = new Date().getHours();
-    const firstName = user?.name ? user.name.split(' ')[0] : 'there';
-    if (hrs < 12) return `Good Morning, ${firstName}! ☀️`;
+    const firstName = user?.name ? user.name.split(' ')[0] : 'Dhanin';
+    if (hrs < 12) return `Good Morning, ${firstName}! 👋`;
     if (hrs < 17) return `Good Afternoon, ${firstName}! 🌤️`;
     return `Good Evening, ${firstName}! 🌙`;
   };
 
-  const todayStr = new Date().toLocaleDateString('en-US', {
+  const todayStr = new Date().toLocaleDateString(undefined, {
     weekday: 'long',
-    year: 'numeric',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
+    year: 'numeric'
   });
 
   const todayISO = new Date().toISOString().slice(0, 10);
-  const isDoneToday = (h) => {
-    return h.completedDates && h.completedDates.some((d) => d.slice(0, 10) === todayISO);
-  };
 
-  const activeHabits = habits.filter(h => !h.isArchived);
+  const isDoneToday = (h) => h.completedDates && h.completedDates.some(d => d.slice(0, 10) === todayISO);
+  const isSkippedToday = (h) => h.skippedDates && h.skippedDates.some(d => d.slice(0, 10) === todayISO);
+  const isMissedToday = (h) => h.missedDates && h.missedDates.some(d => d.slice(0, 10) === todayISO);
+
+  const activeHabits = habits.filter(h => !h.isArchived && h.status !== 'paused');
   const doneCount = activeHabits.filter(isDoneToday).length;
-  const totalCount = activeHabits.length;
-  const donePercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
-  const bestStreak = habits.length > 0 ? Math.max(...habits.map((h) => h.streak || 0)) : 0;
+  const totalActive = activeHabits.length;
+  const donePercent = totalActive > 0 ? Math.round((doneCount / totalActive) * 100) : 0;
+  const maxStreak = habits.length > 0 ? Math.max(...habits.map(h => h.streak || 0)) : 0;
 
-  // Personal daily completion target from user profile
   const userDailyTarget = user?.dailyTarget || 4;
   const targetPercent = Math.min(100, Math.round((doneCount / userDailyTarget) * 100));
-  const isTargetAchieved = doneCount >= userDailyTarget;
 
-  // Predictive streak-break detection
+  // Predictive streak risk detection (habits with active streak not done today)
   const atRiskHabits = activeHabits.filter(h => !isDoneToday(h) && (h.streak || 0) >= 1);
 
-  // Focus Habit recommendation
+  // Focus Habit (High priority uncompleted, then longest active streak)
   const uncompletedActive = activeHabits.filter(h => !isDoneToday(h));
   const priorityWeights = { High: 3, Medium: 2, Low: 1 };
   const sortedCandidates = [...uncompletedActive].sort(
@@ -62,314 +84,472 @@ function Dashboard({ habits = [], checkinHabit, xp = 240, level = 3, setActiveTa
   );
   const focusHabit = sortedCandidates[0] || null;
 
-  // Unlocked badges logic
-  const badgeCount = user?.badges ? user.badges.length : 1;
+  // Filter today's habits
+  let displayedTodayHabits = activeHabits;
+  if (filterToday === 'pending') {
+    displayedTodayHabits = activeHabits.filter(h => !isDoneToday(h) && !isSkippedToday(h) && !isMissedToday(h));
+  } else if (filterToday === 'completed') {
+    displayedTodayHabits = activeHabits.filter(isDoneToday);
+  }
 
-  // Sort and slice top streaks
-  const streakLeaders = [...activeHabits]
-    .sort((a, b) => (b.streak || 0) - (a.streak || 0))
-    .slice(0, 5);
-
-  // Active challenges from local storage
-  const [joinedChallenges, setJoinedChallenges] = useState([]);
-  useEffect(() => {
-    const raw = localStorage.getItem('zh_challenges');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      setJoinedChallenges(parsed.filter((c) => c.joined).slice(0, 3));
-    } else {
-      const defaults = [
-        { id: 1, name: '30-Day Fitness', icon: '💪', days: 30, joined: true, prog: 7, color: '#f59e0b', bg: '#fffbeb' },
-        { id: 3, name: 'Hydration Hero', icon: '💧', days: 14, joined: true, prog: 5, color: '#10b981', bg: '#ecfdf5' },
-      ];
-      localStorage.setItem('zh_challenges', JSON.stringify([
-        ...defaults,
-        { id: 2, name: 'Study Streak', icon: '📖', days: 21, joined: false, prog: 0, color: '#8b5cf6', bg: '#ede9fe' }
-      ]));
-      setJoinedChallenges(defaults);
-    }
-  }, []);
+  // Weekly days dots
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const todayDayIndex = (new Date().getDay() + 6) % 7; // 0 = Mon, 6 = Sun
 
   return (
     <div className="page on">
-      {/* Top Welcome Bar */}
+      {/* Top Welcome Header */}
       <div className="topbar">
         <div className="tb-left">
           <div className="pg-title">{getGreeting()}</div>
-          <div className="pg-sub">{todayStr} · Goal: {user?.goal || '🌟 All-round improvement'}</div>
+          <div className="pg-sub">
+            {todayStr} · Target: {doneCount}/{userDailyTarget} Habits ({targetPercent}%)
+          </div>
         </div>
-        <div className="tb-right">
-          <button className="btn sm ghost" onClick={() => setActiveTab('insights')}>
-            🧠 AI Coach & Insights
+
+        <div style={{ display: 'flex', gap: '0.65rem' }}>
+          <button
+            type="button"
+            className="btn-s"
+            onClick={() => setActiveTab('insights')}
+          >
+            <Brain size={16} color="var(--accent)" />
+            AI Habit Coach
           </button>
-          <button className="ib" onClick={() => setDarkMode(!darkMode)} title="Toggle theme">
-            {darkMode ? '☀️' : '🌙'}
+          <button
+            type="button"
+            className="btn-p"
+            onClick={onOpenCreateHabit}
+          >
+            <Plus size={16} />
+            New Habit
           </button>
         </div>
       </div>
 
-      {/* Predictive Streak Alert Banner if any habits at risk */}
+      {/* Motivational Quote Banner */}
+      {quote.t && (
+        <div style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          padding: '0.8rem 1.15rem',
+          marginBottom: '1.25rem',
+          fontSize: '0.84rem',
+          color: 'var(--sub)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>✨</span>
+          <span>"{quote.t}" <strong style={{ color: 'var(--text)' }}>{quote.a}</strong></span>
+        </div>
+      )}
+
+      {/* Streak Protection Alert Banner */}
       {atRiskHabits.length > 0 && (
         <div className="alert-banner">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
             <div>
-              <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#dc2626' }}>
-                Streak Protection Alert: {atRiskHabits.length} habit{atRiskHabits.length > 1 ? 's' : ''} at risk!
+              <div style={{ fontWeight: 800, fontSize: '0.86rem', color: '#ef4444' }}>
+                Streak Protection Alert
               </div>
-              <div style={{ fontSize: '0.74rem', color: 'var(--sub)' }}>
-                {atRiskHabits.map(h => `${h.title} (🔥${h.streak}d)`).join(', ')}
+              <div style={{ fontSize: '0.78rem', color: 'var(--text)' }}>
+                You have {atRiskHabits.length} habit{atRiskHabits.length > 1 ? 's' : ''} with active streaks at risk of breaking before midnight!
               </div>
             </div>
           </div>
           <button
-            className="btn sm"
-            style={{ fontSize: '0.75rem', padding: '5px 12px', background: '#dc2626', color: '#fff' }}
-            onClick={() => checkinHabit(atRiskHabits[0]._id)}
+            type="button"
+            className="btn-s"
+            style={{ fontSize: '0.78rem', padding: '5px 10px', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+            onClick={() => setFilterToday('pending')}
           >
-            Check in {atRiskHabits[0].title.slice(0, 14)} ✓
+            Review At-Risk
           </button>
         </div>
       )}
 
-      {/* Focus Habit Recommendation Card */}
+      {/* High-Leverage Focus Habit Card */}
       {focusHabit && (
         <div className="focus-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ fontSize: '1.9rem' }}>{focusHabit.icon || '⭐'}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '1rem', fontWeight: 800 }}>{focusHabit.title}</span>
-                <span className={`priority-tag ${(focusHabit.priority || 'medium').toLowerCase()}`}>
-                  {focusHabit.priority || 'Medium'}
-                </span>
-                <span style={{ fontSize: '0.75rem', color: '#f97316', fontWeight: 800 }}>
-                  🔥 {focusHabit.streak || 0}d streak
-                </span>
-              </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--sub)', marginTop: '2px' }}>
-                Recommended focus habit for maximum momentum today.
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+              <span style={{ fontSize: '2rem' }}>{focusHabit.icon}</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text)' }}>
+                  {focusHabit.title}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--sub)' }}>
+                  {focusHabit.priority === 'High' ? '🔴 Highest leverage goal for sustained focus today.' : `🔥 Keep your ${focusHabit.streak}-day streak alive!`}
+                </div>
               </div>
             </div>
-            <button className="btn sm" onClick={() => checkinHabit(focusHabit._id)}>
-              Complete Now ✓
-            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                className="btn-p"
+                onClick={() => checkinHabit(focusHabit._id || focusHabit.id)}
+              >
+                <CheckCircle size={16} /> Complete Now (+10 XP)
+              </button>
+              <button
+                type="button"
+                className="btn-s"
+                onClick={() => setSelectedHabitForDetail(focusHabit)}
+              >
+                Inspect
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Daily Motivation Quote */}
-      <div className="quote">
-        <div className="qt">"{quote.t}"</div>
-        <div className="qa">{quote.a}</div>
-      </div>
-
-      {/* Stats Cards grid */}
-      <div className="g4">
-        {/* Daily Target Card */}
+      {/* KPI Stats Grid */}
+      <div className="stats-grid g4" style={{ marginBottom: '1.5rem' }}>
         <div className="sc">
-          <div className="sc-ic" style={{ background: '#ecfdf5' }}>🎯</div>
-          <div className="sc-v">
-            {doneCount}
-            <span style={{ fontSize: '0.95rem', color: 'var(--sub)' }}>/{userDailyTarget}</span>
+          <div className="sc-lbl">Active Habits</div>
+          <div className="sc-val">{totalActive}</div>
+          <div className="sc-sub">{habits.filter(h => h.status === 'paused').length} paused · {habits.filter(h => h.isArchived).length} archived</div>
+        </div>
+
+        <div className="sc">
+          <div className="sc-lbl">Completed Today</div>
+          <div className="sc-val" style={{ color: 'var(--accent)' }}>
+            {doneCount} / {totalActive}
           </div>
-          <div className="sc-l">Daily Target</div>
-          <div className="sc-d" style={{ color: isTargetAchieved ? '#16a34a' : 'var(--accent)', fontWeight: 700 }}>
-            {isTargetAchieved ? '🏆 Target Met!' : `↑ ${targetPercent}% reached`}
+          <div className="sc-sub">{donePercent}% of active habits done</div>
+        </div>
+
+        <div className="sc">
+          <div className="sc-lbl">Active Streak 🔥</div>
+          <div className="sc-val" style={{ color: '#f59e0b' }}>
+            {maxStreak} <span style={{ fontSize: '1rem', fontWeight: 600 }}>Days</span>
           </div>
+          <div className="sc-sub">Best record across all habits</div>
         </div>
 
-        {/* Best Streak Card */}
         <div className="sc">
-          <div className="sc-ic" style={{ background: '#fff7ed' }}>🔥</div>
-          <div className="sc-v">{bestStreak}</div>
-          <div className="sc-l">Best Streak</div>
-          <div className="sc-d" style={{ color: '#f97316' }}>days running</div>
-        </div>
-
-        {/* Badges Earned Card */}
-        <div className="sc">
-          <div className="sc-ic" style={{ background: '#ede9fe' }}>🏅</div>
-          <div className="sc-v">{badgeCount}</div>
-          <div className="sc-l">Badges Earned</div>
-          <div className="sc-d up">Achievements</div>
-        </div>
-
-        {/* XP Points Card */}
-        <div className="sc">
-          <div className="sc-ic" style={{ background: '#fdf2f8' }}>⚡</div>
-          <div className="sc-v">{xp}</div>
-          <div className="sc-l">XP Points</div>
-          <div className="sc-d" style={{ color: 'var(--accent)' }}>Level {level}</div>
+          <div className="sc-lbl">Target Met</div>
+          <div className="sc-val" style={{ color: '#3b82f6' }}>
+            {targetPercent}%
+          </div>
+          <div className="sc-sub">Daily goal: {userDailyTarget} habits</div>
         </div>
       </div>
 
-      {/* Main Double Grid */}
-      <div className="g2" style={{ marginBottom: '1.25rem' }}>
-        {/* Left Side: Habits list */}
-        <div className="card">
-          <div className="ct">
-            📋 Today's Habits{' '}
-            <span className="sa" onClick={() => setActiveTab('habits')}>
-              View all ({activeHabits.length}) →
-            </span>
-          </div>
+      {/* Main Two-Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
+        {/* Left Column: Today's Habits List */}
+        <div>
+          <div style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: '18px',
+            padding: '1.35rem',
+            boxShadow: 'var(--shadow)'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '1rem',
+              flexWrap: 'wrap',
+              gap: '0.5rem'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Today's Habits</h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--sub)' }}>
+                  Mark your progress with 1-click tactile actions
+                </p>
+              </div>
 
-          {activeHabits.length === 0 ? (
-            <p style={{ fontSize: '0.82rem', color: 'var(--sub)', padding: '1rem 0' }}>
-              No active habits created yet. Click{' '}
-              <span className="lnk" onClick={() => setActiveTab('habits')}>here</span> to make one!
-            </p>
-          ) : (
-            activeHabits.slice(0, 4).map((h) => {
-              const done = isDoneToday(h);
-              const habitColor = h.color || '#10b981';
-              return (
-                <div
-                  key={h._id}
-                  className={`hr ${done ? 'done' : ''}`}
-                  style={{
-                    padding: '0.65rem 0.85rem',
-                    marginBottom: '0.42rem',
-                    borderLeft: `3px solid ${habitColor}`
-                  }}
+              {/* Status Filter Chips */}
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--bg)', padding: '2px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <button
+                  type="button"
+                  className={`subtab-btn ${filterToday === 'all' ? 'active' : ''}`}
+                  onClick={() => setFilterToday('all')}
+                  style={{ padding: '4px 8px', fontSize: '0.74rem' }}
                 >
-                  <div
-                    className="h-em"
-                    style={{
-                      background: `${habitColor}18`,
-                      width: '34px',
-                      height: '34px',
-                      fontSize: '1rem'
-                    }}
-                  >
-                    {h.icon || '⭐'}
-                  </div>
-                  <div className="h-bd">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span className="h-nm" style={{ fontSize: '0.83rem' }}>{h.title}</span>
-                      <span className={`priority-tag ${(h.priority || 'medium').toLowerCase()}`}>
-                        {h.priority || 'Medium'}
-                      </span>
-                    </div>
-                    <div className="h-mt">
-                      {h.category} · 🔥 {h.streak}d streak
-                    </div>
-                  </div>
-                  <button
-                    className={`chk ${done ? 'done' : ''}`}
-                    onClick={() => checkinHabit(h._id)}
-                    disabled={done}
-                  >
-                    ✓
-                  </button>
-                </div>
-              );
-            })
-          )}
+                  All ({activeHabits.length})
+                </button>
+                <button
+                  type="button"
+                  className={`subtab-btn ${filterToday === 'pending' ? 'active' : ''}`}
+                  onClick={() => setFilterToday('pending')}
+                  style={{ padding: '4px 8px', fontSize: '0.74rem' }}
+                >
+                  Pending ({activeHabits.length - doneCount})
+                </button>
+                <button
+                  type="button"
+                  className={`subtab-btn ${filterToday === 'completed' ? 'active' : ''}`}
+                  onClick={() => setFilterToday('completed')}
+                  style={{ padding: '4px 8px', fontSize: '0.74rem' }}
+                >
+                  Done ({doneCount})
+                </button>
+              </div>
+            </div>
 
-          <div style={{ marginTop: '0.85rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 800, color: 'var(--sub)', marginBottom: '0.32rem' }}>
-              <span>OVERALL DAILY COMPLETION</span>
-              <span>{donePercent}%</span>
-            </div>
-            <div className="pb">
-              <div
-                className="pf"
-                style={{
-                  background: donePercent === 100 ? '#16a34a' : 'var(--accent)',
-                  width: `${donePercent}%`
-                }}
-              />
-            </div>
+            {displayedTodayHabits.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '2.5rem 1rem',
+                color: 'var(--sub)',
+                fontSize: '0.88rem'
+              }}>
+                <Sparkles size={32} color="var(--accent)" style={{ margin: '0 auto 0.75rem' }} />
+                <p style={{ fontWeight: 700 }}>No habits in this view.</p>
+                <p style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                  {filterToday === 'pending' ? 'All active habits are completed for today! 🚀' : 'Create your first habit to begin.'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {displayedTodayHabits.map((habit) => {
+                  const habitId = habit._id || habit.id;
+                  const isDone = isDoneToday(habit);
+                  const isSkip = isSkippedToday(habit);
+                  const isMiss = isMissedToday(habit);
+
+                  return (
+                    <div
+                      key={habitId}
+                      style={{
+                        background: 'var(--surface)',
+                        border: isDone ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border)',
+                        borderRadius: '14px',
+                        padding: '0.9rem 1.15rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '0.75rem',
+                        transition: 'border 0.2s, background 0.2s'
+                      }}
+                    >
+                      {/* Left: Icon, Title, Streak */}
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer', flex: 1, minWidth: '220px' }}
+                        onClick={() => setSelectedHabitForDetail(habit)}
+                        title="Click to view details"
+                      >
+                        <span style={{
+                          fontSize: '1.4rem',
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '10px',
+                          background: `${habit.color || '#10b981'}1f`,
+                          display: 'grid',
+                          placeItems: 'center'
+                        }}>
+                          {habit.icon || '⭐'}
+                        </span>
+                        <div>
+                          <div style={{
+                            fontWeight: 800,
+                            fontSize: '0.92rem',
+                            color: 'var(--text)',
+                            textDecoration: isDone ? 'line-through' : 'none',
+                            opacity: isDone ? 0.85 : 1
+                          }}>
+                            {habit.title}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginTop: '2px' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--sub)' }}>
+                              {habit.category} · {habit.frequency}
+                            </span>
+                            {(habit.streak || 0) > 0 && (
+                              <span style={{
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                color: '#f59e0b',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px'
+                              }}>
+                                <Flame size={12} /> {habit.streak}d
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: 4-State Checkin Button Group */}
+                      <div className="checkin-btn-group">
+                        <button
+                          type="button"
+                          className={`chk-btn ${isDone ? 'active completed' : ''}`}
+                          onClick={() => checkinHabit(habitId)}
+                          title="Mark habit completed today"
+                        >
+                          ✓ Done
+                        </button>
+                        <button
+                          type="button"
+                          className={`chk-btn ${isSkip ? 'active skipped' : ''}`}
+                          onClick={() => skipHabit(habitId)}
+                          title="Skip habit (freezes streak)"
+                        >
+                          ⏸ Skip
+                        </button>
+                        <button
+                          type="button"
+                          className={`chk-btn ${isMiss ? 'active missed' : ''}`}
+                          onClick={() => missHabit(habitId)}
+                          title="Mark missed"
+                        >
+                          ✗ Miss
+                        </button>
+                        {(isDone || isSkip || isMiss) && (
+                          <button
+                            type="button"
+                            className="chk-btn"
+                            onClick={() => pendingHabit(habitId)}
+                            title="Reset to Pending"
+                          >
+                            ⏳
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right Side: Streaks Leaders & Badges */}
-        <div className="card">
-          <div className="ct">🔥 Streak Leaders</div>
-          {streakLeaders.length === 0 ? (
-            <p style={{ fontSize: '0.8rem', color: 'var(--sub)', padding: '0.4rem 0' }}>Streaks will appear once habits are checked in!</p>
-          ) : (
-            streakLeaders.map((h, i) => (
-              <div key={h._id} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.42rem 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontSize: '0.88rem', width: '20px' }}>{['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][i] || '⚡'}</span>
-                <span style={{ fontSize: '1rem' }}>{h.icon || '⭐'}</span>
-                <div style={{ flex: 1, fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {h.title}
-                </div>
-                <span className={`priority-tag ${(h.priority || 'medium').toLowerCase()}`}>
-                  {h.priority || 'Medium'}
+        {/* Right Column: Weekly Progress & Quick Hub */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Weekly Progress Card */}
+          <div style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: '18px',
+            padding: '1.35rem',
+            boxShadow: 'var(--shadow)'
+          }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: '0.85rem' }}>
+              Weekly Consistency
+            </h4>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.35rem', marginBottom: '1rem' }}>
+              {daysOfWeek.map((day, idx) => {
+                const isCurrent = idx === todayDayIndex;
+                const isPast = idx < todayDayIndex;
+
+                return (
+                  <div key={day} style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      color: isCurrent ? 'var(--accent)' : 'var(--sub)',
+                      marginBottom: '4px'
+                    }}>
+                      {day}
+                    </div>
+                    <div style={{
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: isCurrent ? 'var(--accent)' : (isPast ? 'var(--accent-l)' : 'var(--bg)'),
+                      border: isCurrent ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: isCurrent ? '#fff' : (isPast ? 'var(--accent)' : 'var(--muted)'),
+                      fontSize: '0.75rem',
+                      fontWeight: 800
+                    }}>
+                      {isPast ? '✓' : isCurrent ? `${doneCount}` : '·'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ fontSize: '0.78rem', color: 'var(--sub)', lineHeight: 1.45 }}>
+              Maintain consistency to preserve momentum and unlock the <strong>7-Day Streak Badge</strong> (+50 XP).
+            </div>
+          </div>
+
+          {/* Quick Shortcuts */}
+          <div style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: '18px',
+            padding: '1.35rem',
+            boxShadow: 'var(--shadow)'
+          }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: '0.85rem' }}>
+              Productivity Shortcuts
+            </h4>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn-s"
+                onClick={() => setActiveTab('calendar')}
+                style={{ justifyContent: 'space-between', padding: '0.65rem 0.85rem' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Calendar size={16} /> Heatmap Calendar
                 </span>
-                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f97316' }}>🔥{h.streak}</span>
-              </div>
-            ))
-          )}
+                <ArrowRight size={14} />
+              </button>
 
-          <div className="ct" style={{ marginTop: '1.2rem' }}>
-            🏅 Earned Badges{' '}
-            <span className="sa" onClick={() => setActiveTab('badges')}>
-              All →
-            </span>
+              <button
+                type="button"
+                className="btn-s"
+                onClick={() => setActiveTab('goals')}
+                style={{ justifyContent: 'space-between', padding: '0.65rem 0.85rem' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Target size={16} /> Goal Milestones
+                </span>
+                <ArrowRight size={14} />
+              </button>
+
+              <button
+                type="button"
+                className="btn-s"
+                onClick={() => setActiveTab('analytics')}
+                style={{ justifyContent: 'space-between', padding: '0.65rem 0.85rem' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <TrendingUp size={16} /> Performance Charts
+                </span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
-          {user?.badges && user.badges.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.38rem', marginTop: '0.3rem' }}>
-              {user.badges.slice(0, 3).map((b, idx) => (
-                <div key={idx} style={{ background: 'var(--accent-l)', borderRadius: '7px', padding: '3px 9px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)' }}>
-                  🏅 {b}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.38rem', marginTop: '0.3rem' }}>
-              <div style={{ background: 'var(--accent-l)', borderRadius: '7px', padding: '3px 9px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)' }}>
-                🏅 Starter Badge
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Active Challenges card footer */}
-      <div className="card">
-        <div className="ct">
-          🏆 Active Challenges{' '}
-          <span className="sa" onClick={() => setActiveTab('challenges')}>
-            View all →
-          </span>
-        </div>
-        <div className="g3">
-          {joinedChallenges.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', fontSize: '0.82rem', color: 'var(--sub)' }}>
-              No active challenges yet.{' '}
-              <span className="lnk" onClick={() => setActiveTab('challenges')}>
-                Join one →
-              </span>
-            </div>
-          ) : (
-            joinedChallenges.map((c) => {
-              const progPct = Math.round((c.prog / c.days) * 100);
-              return (
-                <div key={c.id} style={{ padding: '0.8rem 0.95rem', borderRadius: '10px', background: 'var(--card)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem' }}>
-                    <span style={{ fontSize: '1.1rem' }}>{c.icon}</span>
-                    <span style={{ fontSize: '0.81rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{c.name}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: '0.71rem', fontWeight: 800, color: c.color }}>{progPct}%</span>
-                  </div>
-                  <div className="pb" style={{ height: '4px' }}>
-                    <div className="pf" style={{ background: c.color, width: `${progPct}%` }} />
-                  </div>
-                  <div style={{ fontSize: '0.69rem', color: 'var(--sub)', marginTop: '0.28rem' }}>
-                    Day {c.prog} of {c.days}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+      {/* Habit Details Modal */}
+      {selectedHabitForDetail && (
+        <HabitDetailModal
+          habit={selectedHabitForDetail}
+          isOpen={!!selectedHabitForDetail}
+          onClose={() => setSelectedHabitForDetail(null)}
+          onCheckin={checkinHabit}
+          onSkip={skipHabit}
+          onMiss={missHabit}
+          onPending={pendingHabit}
+          onEdit={(h) => {
+            setSelectedHabitForDetail(null);
+            // Open edit modal
+            if (editHabit) editHabit(h);
+          }}
+          onDuplicate={duplicateHabit}
+          onPauseToggle={pauseToggleHabit}
+          onArchiveToggle={archiveHabit}
+          onDelete={deleteHabit}
+        />
+      )}
     </div>
   );
 }
-
-export default Dashboard;
